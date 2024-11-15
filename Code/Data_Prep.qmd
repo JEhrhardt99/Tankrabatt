@@ -70,7 +70,7 @@ The remote repository from Tankerkönig (link einfügen) can be cloned using `gi
 #| output: false
 
 # move up to project root and read data from data subfolder
-df <- fread("../Data/Tankerkoenig/prices/2021/01/2021-01-01-prices.csv")
+df <- fread("../Data/Tankerkoenig/prices/2022/01/2022-01-01-prices.csv")
 ```
 
 #### Data Preprocessing
@@ -111,7 +111,6 @@ summary(df)
 
 What about those observations where the price is negative? The Value should represent an actual price, not a price change. How can this be explained?
 
-
 ```{r}
 #| label: investigate_data
 #| echo: true
@@ -148,9 +147,7 @@ weird_obs <- df %>% filter(diesel == -0.001 |
 head(weird_obs, 3)
 ```
 
-
 Check if there is a pattern to the stations with such observations:
-
 
 ```{r}
 #| label: check_pattern
@@ -161,7 +158,7 @@ Check if there is a pattern to the stations with such observations:
 unique(weird_obs$station_uuid)
 
 # load station data for the corresponding day to learn more
-df_stations <- fread("../Data/Tankerkoenig/stations/2021/01/2021-01-01-stations.csv")
+df_stations <- fread("../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv")
 
 # subset the stations with the weird observations
 weird_stations <- df_stations %>%
@@ -172,35 +169,33 @@ head(weird_stations, 3)
 
 The variable `openingtimes_json` contains information on the opening times and will be handled later on. However, in the raw data there seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.
 
-
 First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2023-07-12:
-
 
 ```{r}
 #| label: check_pattern2
 #| echo: true
 #| output: true
 
-# price data for 2023-07-12
-df_2023_test <- fread("../Data/Tankerkoenig/prices/2023/07/2023-07-12-prices.csv")
+# price data for 2022-07-12
+df_2022_test <- fread("../Data/Tankerkoenig/prices/2022/07/2022-07-12-prices.csv")
 
 # load station data for the corresponding day to learn more
-df_stations2023_test <- fread("../Data/Tankerkoenig/stations/2023/07/2023-07-12-stations.csv")
+df_stations2022_test <- fread("../Data/Tankerkoenig/stations/2022/07/2022-07-12-stations.csv")
 
 # correct time zone
-df_2023_test$date <- as.POSIXct(df_2023_test$date,
+df_2022_test$date <- as.POSIXct(df_2022_test$date,
                       format = "%Y-%m-%d %H:%M:%S%z",
                       tz = "Europe/Berlin")
 
 # subset the weird observations
-weird_obs_test <- df_2023_test %>% filter(diesel == -0.001 |
+weird_obs_test <- df_2022_test %>% filter(diesel == -0.001 |
                              e10 == -0.001)
 
 # give station ids
 unique(weird_obs_test$station_uuid)
 
 # subset the stations with the weird observations
-weird_stations_test <- df_stations2023_test %>%
+weird_stations_test <- df_stations2022_test %>%
   filter(uuid %in% unique(weird_obs_test$station_uuid))
 
 
@@ -213,7 +208,6 @@ head(weird_stations$name)
 head(weird_stations_test$name)
 ```
 
-
 ```{r}
 #| label: clear_environment
 #| echo: true
@@ -223,7 +217,7 @@ head(weird_stations_test$name)
 rm(list = setdiff(ls(), "df"))
 ```
 
-The analysis will only include diesel prices and E10 prices, hence, E5 prices should be omitted early on to save memory. 
+The analysis will only include diesel prices and E10 prices, hence, E5 prices should be omitted early on to save memory.
 
 ```{r}
 #| label: ommit_e5
@@ -261,7 +255,6 @@ nrow(daily_averages)
 # should be the same as the number of unique station_uuids
 unique(df$station_uuid) %>% length()
 ```
-
 
 #### Save Data
 
@@ -310,9 +303,7 @@ str(test)
 head(test, 3)
 ```
 
-
 ### Big Working Example
-
 
 ## Prix des carburants en France
 
@@ -325,23 +316,21 @@ head(test, 3)
 #| echo: true
 #| output: false
 
-getwd()
-# load the data
-df_FRA <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.csv")
-
-df_FRA2 <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v3.csv")
-
-# library(jsonlite)
-json_data <- fromJSON("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.json", flatten = TRUE)
-
-str(json_data)
-
-dt <- as.data.table(json_data)
-
-str(dt)
+# getwd()
+# # load the data
+# df_FRA <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.csv")
+# 
+# df_FRA2 <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v3.csv")
+# 
+# # library(jsonlite)
+# json_data <- fromJSON("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.json", flatten = TRUE)
+# 
+# str(json_data)
+# 
+# dt <- as.data.table(json_data)
+# 
+# str(dt)
 ```
-
-
 
 #### Cleaning Data
 
@@ -351,58 +340,58 @@ str(dt)
 #| output: true
 
 # give a list of the variable names
-names(df_FRA)
-
-# Aim: Clean rename the colums to English 
-
-# Convert the data frame to a data.table for efficiency
-setDT(df_FRA)
-
-# Rename columns
-setnames(df_FRA, 
-         old = c("id", "latitude", "longitude", "Code postal", "pop", "Adresse", 
-                 "Ville", "services", "prix", "rupture", "horaires", "geom", 
-                 "Prix Gazole mis à jour le", "Prix Gazole", 
-                 "Prix SP95 mis à jour le", "Prix SP95", 
-                 "Prix E85 mis à jour le", "Prix E85", 
-                 "Prix GPLc mis à jour le", "Prix GPLc", 
-                 "Prix E10 mis à jour le", "Prix E10", 
-                 "Prix SP98 mis à jour le", "Prix SP98", 
-                 "Début rupture e10 (si temporaire)", "Type rupture e10", 
-                 "Début rupture sp98 (si temporaire)", "Type rupture sp98", 
-                 "Début rupture sp95 (si temporaire)", "Type rupture sp95", 
-                 "Début rupture e85 (si temporaire)", "Type rupture e85", 
-                 "Début rupture GPLc (si temporaire)", "Type rupture GPLc", 
-                 "Début rupture gazole (si temporaire)", "Type rupture gazole", 
-                 "Carburants disponibles", "Carburants indisponibles", 
-                 "Carburants en rupture temporaire", "Carburants en rupture definitive", 
-                 "Automate 24-24 (oui/non)", "Services proposés", 
-                 "Département", "code_departement", "Région", "code_region", 
-                 "horaires détaillés"), 
-         new = c("id", "latitude", "longitude", "postal_code", "population", 
-                 "address", "city", "services", "price", "out_of_stock", 
-                 "hours", "geometry", "diesel_price_updated_on", "diesel_price", 
-                 "SP95_price_updated_on", "SP95_price", "E85_price_updated_on", 
-                 "E85_price", "GPLc_price_updated_on", "GPLc_price", 
-                 "E10_price_updated_on", "E10_price", "SP98_price_updated_on", 
-                 "SP98_price", "E10_out_of_stock_start", "E10_out_of_stock_type", 
-                 "SP98_out_of_stock_start", "SP98_out_of_stock_type", 
-                 "SP95_out_of_stock_start", "SP95_out_of_stock_type", 
-                 "E85_out_of_stock_start", "E85_out_of_stock_type", 
-                 "GPLc_out_of_stock_start", "GPLc_out_of_stock_type", 
-                 "diesel_out_of_stock_start", "diesel_out_of_stock_type", 
-                 "available_fuels", "unavailable_fuels", 
-                 "temporarily_out_of_stock_fuels", "permanently_out_of_stock_fuels", 
-                 "self_service_24_7", "offered_services", "department", 
-                 "department_code", "region", "region_code", "detailed_hours"))
-
-
-# check the structure of the data
-str(df_FRA)
-
-
-# clear environment 
-rm(list = ls())
+# names(df_FRA)
+# 
+# # Aim: Clean rename the colums to English 
+# 
+# # Convert the data frame to a data.table for efficiency
+# setDT(df_FRA)
+# 
+# # Rename columns
+# setnames(df_FRA, 
+#          old = c("id", "latitude", "longitude", "Code postal", "pop", "Adresse", 
+#                  "Ville", "services", "prix", "rupture", "horaires", "geom", 
+#                  "Prix Gazole mis à jour le", "Prix Gazole", 
+#                  "Prix SP95 mis à jour le", "Prix SP95", 
+#                  "Prix E85 mis à jour le", "Prix E85", 
+#                  "Prix GPLc mis à jour le", "Prix GPLc", 
+#                  "Prix E10 mis à jour le", "Prix E10", 
+#                  "Prix SP98 mis à jour le", "Prix SP98", 
+#                  "Début rupture e10 (si temporaire)", "Type rupture e10", 
+#                  "Début rupture sp98 (si temporaire)", "Type rupture sp98", 
+#                  "Début rupture sp95 (si temporaire)", "Type rupture sp95", 
+#                  "Début rupture e85 (si temporaire)", "Type rupture e85", 
+#                  "Début rupture GPLc (si temporaire)", "Type rupture GPLc", 
+#                  "Début rupture gazole (si temporaire)", "Type rupture gazole", 
+#                  "Carburants disponibles", "Carburants indisponibles", 
+#                  "Carburants en rupture temporaire", "Carburants en rupture definitive", 
+#                  "Automate 24-24 (oui/non)", "Services proposés", 
+#                  "Département", "code_departement", "Région", "code_region", 
+#                  "horaires détaillés"), 
+#          new = c("id", "latitude", "longitude", "postal_code", "population", 
+#                  "address", "city", "services", "price", "out_of_stock", 
+#                  "hours", "geometry", "diesel_price_updated_on", "diesel_price", 
+#                  "SP95_price_updated_on", "SP95_price", "E85_price_updated_on", 
+#                  "E85_price", "GPLc_price_updated_on", "GPLc_price", 
+#                  "E10_price_updated_on", "E10_price", "SP98_price_updated_on", 
+#                  "SP98_price", "E10_out_of_stock_start", "E10_out_of_stock_type", 
+#                  "SP98_out_of_stock_start", "SP98_out_of_stock_type", 
+#                  "SP95_out_of_stock_start", "SP95_out_of_stock_type", 
+#                  "E85_out_of_stock_start", "E85_out_of_stock_type", 
+#                  "GPLc_out_of_stock_start", "GPLc_out_of_stock_type", 
+#                  "diesel_out_of_stock_start", "diesel_out_of_stock_type", 
+#                  "available_fuels", "unavailable_fuels", 
+#                  "temporarily_out_of_stock_fuels", "permanently_out_of_stock_fuels", 
+#                  "self_service_24_7", "offered_services", "department", 
+#                  "department_code", "region", "region_code", "detailed_hours"))
+# 
+# 
+# # check the structure of the data
+# str(df_FRA)
+# 
+# 
+# # clear environment 
+# rm(list = ls())
 ```
 
 ## Prix des carburants en France XML
@@ -417,7 +406,7 @@ library(xml2)
 library(purrr)
 
 # XML-Datei einlesen
-xml_data <- read_xml("../Data/Prix-des-carburants/2021/PrixCarburants_annuel_2021.xml")
+xml_data <- read_xml("../Data/Prix-des-carburants/2022/PrixCarburants_annuel_2022.xml")
 
 # XML-Struktur anzeigen
 # xml_structure(xml_data)
@@ -439,6 +428,3 @@ test <- xml_data %>% xml_find_all("//pdv_liste/pdv")
 library(microbenchmark)
 
 ```
-
-
-
