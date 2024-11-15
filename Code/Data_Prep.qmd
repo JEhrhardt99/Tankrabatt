@@ -1,0 +1,444 @@
+---
+title: "Data Preprocessing"
+author: "Jannes Ehrhardt"
+date: today
+bibliography: quarto_documentation.bib
+format:
+  html: 
+    theme: journal
+    toc: true
+    toc-depth: 4
+    toc-title: "Data Preprocessings"
+    fig-align: left
+    code-link: true
+editor: visual
+editor_options: 
+  chunk_output_type: console
+execute: 
+  echo: true
+---
+
+## Overview
+
+This script documents the loading, preprocessing and data exploration.
+
+## Loading Libraries
+
+When rerunning the code, please make sure that all packages that will be loaded here are installed on your machine.
+
+```{r}
+#| label: load_packages
+#| echo: true
+#| output: false
+
+library(ggplot2)
+library(ggthemes)
+library(jsonlite)
+library(tidyverse)
+library(data.table)
+```
+
+## Directories
+
+This project will be pushed to a remote repository on gitlab. Therefore, the the working directory is set in a relative way to minimize steps while rerunning the code.
+
+Since this rendering quarto files requires an interactive RStudio environment, the normal `getActiveDocumentContext()` function will not allow any rendering. This is solved by requiring the `rstudioapi` package.
+
+```{r}
+#| label: setwd
+#| echo: true
+#| output: false
+# set working directory to script location
+if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
+  setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+}
+# check if wd is the root directory
+getwd() 
+```
+
+## Tankerkönig
+
+### Small Working Example
+
+#### Loading Data
+
+The remote repository from Tankerkönig (link einfügen) can be cloned using `git clone`. However, The hole repository takes up over 100GB storage and thus is too large for my machine. The repository contains daily price data for gas stations in Germany since June 2014. The fuel tax discount came into effect at 1. of June 2022 and ended 31. of August 2022 (3 month period). To test for parallel trends with neighboring country France, I decided to manually download the data for 2021, 2022 and 2023. The data structure is as follows: For every day, there are two corresponding files: `prices.csv` and `stations.csv`, which are stored in sub directories of the `data` folder. The `prices.csv` file contains the prices and price changes for every gas station in Germany. The `stations.csv` file contains the metadata for every corresponding gas station in Germany. I have experimented with iteratively reading and binding the price data. However, the high observation count always results in memory overload (one single day contains between 200,000 to 300,000 observations). For addapting the approach of @Frondel2024, only daily averages will be needed. Therefore, I first calculate the daily averages and then merge the data, to make computations possible. The first step is to find a way to calculate daily price averages per station for one day, before implementing an iterative approach to do it for all days in the period of interest
+
+```{r}
+#| label: read_day_1
+#| echo: true
+#| output: false
+
+# move up to project root and read data from data subfolder
+df <- fread("../Data/Tankerkoenig/prices/2021/01/2021-01-01-prices.csv")
+```
+
+#### Data Preprocessing
+
+Now, let us explore the data:
+
+```{r}
+#| label: correct_date
+#| echo: true
+#| output: false
+
+# first, the date varaible is not correctly read and needs to be corrected to German time zone:
+# Convert the 'date' column to POSIXct and handle time zone
+df$date <- as.POSIXct(df$date,
+                      format = "%Y-%m-%d %H:%M:%S%z",
+                      tz = "Europe/Berlin")
+```
+
+```{r}
+#| label: active_stations
+#| echo: true
+#| output: true
+
+# How many stations were active on that day?
+unique(df$station_uuid) %>% length()
+
+# Show variable types
+str(df)
+
+# show if there are any missing values
+colSums(is.na(df))
+
+# summary statistics
+summary(df)
+```
+
+#### Data Cleaning
+
+What about those observations where the price is negative? The Value should represent an actual price, not a price change. How can this be explained?
+
+
+```{r}
+#| label: investigate_data
+#| echo: true
+#| output: true
+
+
+
+# create histogram of distribution of diesel prices
+ggplot(df, aes(x = diesel)) +
+  geom_histogram(bins = 50, fill = "blue", color = "black") +
+  labs(title = "Distribution of Diesel Prices",
+       x = "Price in Euro",
+       y = "Frequency") +
+  theme_few()
+
+# create histogram of distribution of e10 prices
+ggplot(df, aes(x = e10)) +
+  geom_histogram(bins = 50, fill = "blue", color = "black") +
+  labs(title = "Distribution of E10 Prices",
+       x = "Price in Euro",
+       y = "Frequency") +
+  theme_few()
+```
+
+```{r}
+#| label: investigate_weird_prices
+#| echo: true
+#| output: true
+
+# subset the weird observations
+weird_obs <- df %>% filter(diesel == -0.001 |
+                             e10 == -0.001)
+
+head(weird_obs, 3)
+```
+
+
+Check if there is a pattern to the stations with such observations:
+
+
+```{r}
+#| label: check_pattern
+#| echo: true
+#| output: true
+
+# give station ids
+unique(weird_obs$station_uuid)
+
+# load station data for the corresponding day to learn more
+df_stations <- fread("../Data/Tankerkoenig/stations/2021/01/2021-01-01-stations.csv")
+
+# subset the stations with the weird observations
+weird_stations <- df_stations %>%
+  filter(uuid %in% unique(weird_obs$station_uuid))
+
+head(weird_stations, 3)
+```
+
+The variable `openingtimes_json` contains information on the opening times and will be handled later on. However, in the raw data there seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.
+
+
+First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2023-07-12:
+
+
+```{r}
+#| label: check_pattern2
+#| echo: true
+#| output: true
+
+# price data for 2023-07-12
+df_2023_test <- fread("../Data/Tankerkoenig/prices/2023/07/2023-07-12-prices.csv")
+
+# load station data for the corresponding day to learn more
+df_stations2023_test <- fread("../Data/Tankerkoenig/stations/2023/07/2023-07-12-stations.csv")
+
+# correct time zone
+df_2023_test$date <- as.POSIXct(df_2023_test$date,
+                      format = "%Y-%m-%d %H:%M:%S%z",
+                      tz = "Europe/Berlin")
+
+# subset the weird observations
+weird_obs_test <- df_2023_test %>% filter(diesel == -0.001 |
+                             e10 == -0.001)
+
+# give station ids
+unique(weird_obs_test$station_uuid)
+
+# subset the stations with the weird observations
+weird_stations_test <- df_stations2023_test %>%
+  filter(uuid %in% unique(weird_obs_test$station_uuid))
+
+
+# display weird observations of 2021-01-01 and 2023-07-12
+
+# 2021-01-01
+head(weird_stations$name)
+
+# 2023-07-12
+head(weird_stations_test$name)
+```
+
+
+```{r}
+#| label: clear_environment
+#| echo: true
+#| output: true
+
+# clear the environment except raw data df
+rm(list = setdiff(ls(), "df"))
+```
+
+The analysis will only include diesel prices and E10 prices, hence, E5 prices should be omitted early on to save memory. 
+
+```{r}
+#| label: ommit_e5
+#| echo: true
+#| output: true
+
+# remove the e5 variable using the data.table package
+df <- df[, !"e5"]
+```
+
+#### Daily Averages per Station
+
+```{r}
+#| label: daily_avg
+#| echo: true
+#| output: true
+
+# Extract date only
+unique_date <- as.Date(df$date[1],
+                       tz = "Europe/Berlin")
+
+# Group by station_uuid to calculate daily averages, and add the extracted unique date as a column
+daily_averages <- df[, .(
+  avg_diesel = mean(diesel),
+  avg_e10 = mean(e10)
+), by = station_uuid][, date_only := unique_date]
+
+# View the result
+head(daily_averages,
+     3)
+
+# count the number of observations of daily_averages
+nrow(daily_averages)
+
+# should be the same as the number of unique station_uuids
+unique(df$station_uuid) %>% length()
+```
+
+
+#### Save Data
+
+```{r}
+#| label: save_data
+#| echo: true
+#| output: false
+
+
+getwd()
+# Specify the subfolder
+subfolder <- "../Data/Tankerkoenig/prices_avg"
+
+# save unique date as string to name the saved .csv like that
+
+unique_date_str <- as.character(unique_date)
+
+# Define the full file path including filename
+file_path <- file.path(subfolder, paste0(unique_date_str, "-avg-price-station.csv.gz"))
+
+# Save the DataFrame to CSV
+# write.csv(daily_averages,
+#           file = file_path,
+#           row.names = FALSE, 
+#           fileEncoding = "UTF-8")
+
+
+# now do the same using the fwrite function, since this is more efficient
+fwrite(daily_averages,
+       file = file_path,
+       row.names = FALSE)
+
+```
+
+To be sure, I test if the saved data can be loaded again and the variables are recocgnized correctly:
+
+```{r}
+#| label: test1
+#| echo: true
+#| output: true
+
+test <- fread(paste0("../Data/Tankerkoenig/prices_avg/", unique_date_str, "-avg-price-station.csv.gz"))
+
+str(test)
+
+head(test, 3)
+```
+
+
+### Big Working Example
+
+
+## Prix des carburants en France
+
+### Small Working Example
+
+#### Loading Data
+
+```{r}
+#| label: Prix_Load
+#| echo: true
+#| output: false
+
+getwd()
+# load the data
+df_FRA <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.csv")
+
+df_FRA2 <- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v3.csv")
+
+# library(jsonlite)
+json_data <- fromJSON("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.json", flatten = TRUE)
+
+str(json_data)
+
+dt <- as.data.table(json_data)
+
+str(dt)
+```
+
+
+
+#### Cleaning Data
+
+```{r}
+#| label: Clean_FRA
+#| echo: true
+#| output: true
+
+# give a list of the variable names
+names(df_FRA)
+
+# Aim: Clean rename the colums to English 
+
+# Convert the data frame to a data.table for efficiency
+setDT(df_FRA)
+
+# Rename columns
+setnames(df_FRA, 
+         old = c("id", "latitude", "longitude", "Code postal", "pop", "Adresse", 
+                 "Ville", "services", "prix", "rupture", "horaires", "geom", 
+                 "Prix Gazole mis à jour le", "Prix Gazole", 
+                 "Prix SP95 mis à jour le", "Prix SP95", 
+                 "Prix E85 mis à jour le", "Prix E85", 
+                 "Prix GPLc mis à jour le", "Prix GPLc", 
+                 "Prix E10 mis à jour le", "Prix E10", 
+                 "Prix SP98 mis à jour le", "Prix SP98", 
+                 "Début rupture e10 (si temporaire)", "Type rupture e10", 
+                 "Début rupture sp98 (si temporaire)", "Type rupture sp98", 
+                 "Début rupture sp95 (si temporaire)", "Type rupture sp95", 
+                 "Début rupture e85 (si temporaire)", "Type rupture e85", 
+                 "Début rupture GPLc (si temporaire)", "Type rupture GPLc", 
+                 "Début rupture gazole (si temporaire)", "Type rupture gazole", 
+                 "Carburants disponibles", "Carburants indisponibles", 
+                 "Carburants en rupture temporaire", "Carburants en rupture definitive", 
+                 "Automate 24-24 (oui/non)", "Services proposés", 
+                 "Département", "code_departement", "Région", "code_region", 
+                 "horaires détaillés"), 
+         new = c("id", "latitude", "longitude", "postal_code", "population", 
+                 "address", "city", "services", "price", "out_of_stock", 
+                 "hours", "geometry", "diesel_price_updated_on", "diesel_price", 
+                 "SP95_price_updated_on", "SP95_price", "E85_price_updated_on", 
+                 "E85_price", "GPLc_price_updated_on", "GPLc_price", 
+                 "E10_price_updated_on", "E10_price", "SP98_price_updated_on", 
+                 "SP98_price", "E10_out_of_stock_start", "E10_out_of_stock_type", 
+                 "SP98_out_of_stock_start", "SP98_out_of_stock_type", 
+                 "SP95_out_of_stock_start", "SP95_out_of_stock_type", 
+                 "E85_out_of_stock_start", "E85_out_of_stock_type", 
+                 "GPLc_out_of_stock_start", "GPLc_out_of_stock_type", 
+                 "diesel_out_of_stock_start", "diesel_out_of_stock_type", 
+                 "available_fuels", "unavailable_fuels", 
+                 "temporarily_out_of_stock_fuels", "permanently_out_of_stock_fuels", 
+                 "self_service_24_7", "offered_services", "department", 
+                 "department_code", "region", "region_code", "detailed_hours"))
+
+
+# check the structure of the data
+str(df_FRA)
+
+
+# clear environment 
+rm(list = ls())
+```
+
+## Prix des carburants en France XML
+
+```{r}
+#| label: load_xml
+#| echo: true
+#| output: true
+
+# install.packages("xml2")
+library(xml2)
+library(purrr)
+
+# XML-Datei einlesen
+xml_data <- read_xml("../Data/Prix-des-carburants/2021/PrixCarburants_annuel_2021.xml")
+
+# XML-Struktur anzeigen
+# xml_structure(xml_data)
+
+# XML-Datei in ein Dataframe umwandeln
+# xml_df <- as_data_frame(xml_data)
+
+
+# install.packages("XML")
+library(XML)
+
+# df <- xmlToDataFrame(nodes = getNodeSet(xml_data))
+
+# extract pdv_liste
+test <- xml_data %>% xml_find_all("//pdv_liste/pdv")
+
+
+# install.packages("microbenchmark")
+library(microbenchmark)
+
+```
+
+
+
