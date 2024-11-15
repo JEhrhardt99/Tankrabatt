@@ -469,14 +469,18 @@ ggplot(stations_over_year, aes(x = date, y = num_stations)) +
 # Add dashed lines and adjust the y-axis scale
 ggplot(stations_over_year, aes(x = date, y = num_stations)) +
   geom_line(color = "blue") +
-  geom_vline(xintercept = as.Date("2022-01-01"), linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.Date("2022-12-31"), linetype = "dashed", color = "black") +
+  geom_vline(xintercept = as.Date("2022-01-01"),
+             linetype = "dashed",
+             color = "black") +
+  geom_vline(xintercept = as.Date("2022-12-31"),
+             linetype = "dashed",
+             color = "black") +
   scale_y_continuous(
     limits = range(stations_over_year$num_stations) * c(0.9, 1.1),
     expand = expansion(mult = c(0, 0))
   ) +
   labs(
-    title = "Number of Stations Over the Year 2022",
+    title = "Number of Stations Over the Year 2022 (Germany)",
     x = "Date",
     y = "Number of Stations"
   ) +
@@ -485,9 +489,191 @@ ggplot(stations_over_year, aes(x = date, y = num_stations)) +
     plot.title = element_text(hjust = 0.5)
   )
 
+```
+
+
+How many brands are there in the data set? How are their numbers distributed?
+
+
+```{r}
+#| label: brand_count
+#| echo: true
+#| output: true
+
+# Count the number of unique brands in the data
+unique(df_stations$brand) %>% length()
+
+# Distribution of the brands:
+df_stations[, .N, by = brand][order(-N)]
+
+# Identify the top 10 brands based on the total observations and save them in a variable
+top_brands <- df_stations[, .N, by = brand][order(-N)][1:10, brand]
+
+# Calculate the number of unique stations (UUIDs) for each top brand
+top_brands_stations <- df_stations[
+  brand %in% top_brands, 
+  .(unique_stations = uniqueN(uuid)), 
+  by = brand
+][order(-unique_stations)]
+
+# Print the results
+print(top_brands_stations)
 
 ```
 
+Here it can be seen that the third most common brand is simply shown an empty string in the variable `brand`, implying that there are 1193 stations that are not owned by a brand. In what follows, I assign these stations the brand name "No Brand". Furthermore, I repeat the steps from above searching for the top 11 brands, to identify the actual top 10 brands (No Brand excluded). 
+
+
+```{r}
+#| label: brand_count2
+#| echo: true
+#| output: true
+
+# Assign the stations in with an empty brand name the brand name "No Brand"
+# currently there is simply an empty string in the variable brand
+df_stations[brand == "", brand := "No Brand"]
+
+# Count the number of unique brands in the data
+unique(df_stations$brand) %>% length()
+
+# Identify the top 11 brands based on the total observations and save them in a variable
+top_brands <- df_stations[, .N, by = brand][order(-N)][1:11, brand]
+
+# Calculate the number of unique stations (UUIDs) for each top brand
+top_brands_stations <- df_stations[
+  brand %in% top_brands, 
+  .(unique_stations = uniqueN(uuid)), 
+  by = brand
+][order(-unique_stations)]
+
+# Print the results
+print(top_brands_stations)
+
+
+```
+
+
+
+Now, how do the fluctuations of station counts look across the top brand? Are there any brands that actively whiden their market share in terms of stations?
+
+
+
+```{r}
+#| label: fluctuations_topbrands
+#| echo: true
+#| output: true
+
+# Calculate daily unique station counts for top 10 brands
+brand_station_trends <- df_stations[
+  brand %in% top_brands, 
+  .(num_stations = uniqueN(uuid)), 
+  by = .(brand, date)
+]
+
+
+ggplot(brand_station_trends, aes(x = date, y = num_stations, color = brand)) +
+  geom_line() +
+  labs(
+    title = "Trends in Unique Stations for Top 10 Brands (2022)",
+    x = "Date",
+    y = "Dayly Station Count"
+  ) +
+  theme_few() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.title = element_blank()
+  )
+
+
+```
+
+
+
+What's up with this peak of stations for the brand "No Brand" in the middle of the year? Let's find out:
+
+```{r}
+#| label: peak_no_brand
+#| echo: true
+#| output: true
+
+
+# Find the date of the peak for the brand "No Brand"
+df_stations[brand == "No Brand", .(num_stations = uniqueN(uuid)), by = date][order(-num_stations)][1]
+
+# subset the count data for all stations of the brand "No Brand" over the year
+no_brand_stations <- df_stations[brand == "No Brand", .(num_stations = uniqueN(uuid)), by = date]
+
+# The count of stations is relatively stable, exept for the dates 2022-05-25 and 2022-05-26. Why is this?
+
+# create a data.table with all observations of df_stations for the dates 2022-05-25 and 2022-05-26
+df_05_25_05_26 <- df_stations[date %in% as.Date(c("2022-05-25", "2022-05-26"))]
+
+
+# Are the number of observation in total higher on these two days then the days around them?
+
+# The two weird candidates
+df_05_25 <- df_stations[date %in% as.Date("2022-05-25")]
+df_05_26 <- df_stations[date %in% as.Date("2022-05-26")]
+
+# The day before and after
+df_05_24 <- df_stations[date %in% as.Date("2022-05-24")]
+df_05_27 <- df_stations[date %in% as.Date("2022-05-27")]
+
+# Count the number of observations for each day
+nrow(df_05_24)
+nrow(df_05_25)
+nrow(df_05_26)
+nrow(df_05_27)
+
+
+# How can this be
+
+# Compare 2022-05-26 with 2022-05-27
+df_05_26_27 <- df_stations[date %in% as.Date(c("2022-05-26", "2022-05-27"))]
+
+# count the number of "no brand" stations for each day
+df_05_26_27[brand == "No Brand", .N, by = date]
+
+# If the Number of observations for both days are the same and one day prior there where more stations that are assigned to "no brand", then it means that some stations are actually of a brand and it is not recorded in the data. This can be traced back later on using the uuid. But first, I need to identify the stations that are assigned to "no brand" on 2022-05-26 disappear from that brand assignment on the next day:
+
+# Extract the UUIDs of "No Brand" stations for both days
+no_brand_26 <- df_stations[date == as.Date("2022-05-26") & brand == "No Brand", unique(uuid)]
+no_brand_27 <- df_stations[date == as.Date("2022-05-27") & brand == "No Brand", unique(uuid)]
+
+# Find stations in "No Brand" on 2022-05-26 but not on 2022-05-27
+disappeared_stations <- setdiff(no_brand_26, no_brand_27)
+
+# disappeared_stations has a lengh of 456 (1131 - 675)
+
+# Extract data for these stations for both days to investigate further
+disappeared_data <- df_stations[
+  uuid %in% disappeared_stations & date %in% as.Date(c("2022-05-26", "2022-05-27"))
+]
+
+
+# Check brand assignment for these stations on 2022-05-27
+Stations_that_changed <- df_stations[uuid %in% disappeared_stations & date == as.Date("2022-05-27"), .(uuid, brand, city)]
+
+# give counts of the brands in Stations_that_changed
+Stations_that_changed[, .N, by = brand]
+
+# show cities that were affected of the probable data error
+unique(Stations_that_changed$city)
+
+# There seems to be no pattern, at least not directly
+```
+
+
+A short assessment does not show any pattern to why there are some stations that are assigned to "No Brand" on 2022-05-26 and are assigned to a brand on 2022-05-27. It is likely an error in the raw data. Further research could asses this in more detail, plotting a map of the stations that are affected, maybe revealing any spatial patterns. This is however not important for the further assessment of my research question and can therefore be disregarded.
+
+```{r}
+#| label: clear_environment3
+#| echo: true
+#| output: true
+
+# clear the environment except raw data df
+rm(list = setdiff(ls(), "df_stations"))
+```
 
 
 
