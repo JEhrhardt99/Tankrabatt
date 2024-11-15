@@ -475,9 +475,57 @@ div.csl-indent {
 </div>
 <p>I start by merging the separate station data files, since I have not yet received information on the weird observations in the prices data and might want to change the approach to the data preprocessing.</p>
 <div class="cell">
-<div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># load the station data for the entire year</span></span>
-<span><span class="va">df_stations</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv"</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># load the station data for day 1</span></span>
+<span><span class="va">df_stations_day1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># write a for loop that iterates over all days in the year 2022, taking the folder structure into account</span></span>
+<span></span>
+<span></span>
+<span></span>
+<span><span class="co"># # create a list of all days in 2022</span></span>
+<span><span class="co"># days &lt;- seq(as.Date("2022-01-01"), as.Date("2022-12-31"), by = "days")</span></span>
+<span><span class="co"># </span></span>
+<span><span class="co"># # create a list of all days in 2022 in the format of the folder structure</span></span>
+<span><span class="co"># days_str &lt;- format(days, "%Y/%m/%Y-%m-%d")</span></span>
+<span><span class="co"># </span></span>
+<span><span class="co"># # create an empty data.table to store the station data</span></span>
+<span><span class="co"># df_stations &lt;- data.table()</span></span>
+<span><span class="co"># </span></span>
+<span><span class="co"># # iterate over all days in 2022</span></span>
+<span><span class="co"># for (day in days_str) {</span></span>
+<span><span class="co">#   # load the station data for the day</span></span>
+<span><span class="co">#   df_stations_day &lt;- fread(paste0("../Data/Tankerkoenig/stations/", day, "-stations.csv"))</span></span>
+<span><span class="co">#   </span></span>
+<span><span class="co">#   # add the date as a column</span></span>
+<span><span class="co">#   df_stations_day[, date := as.Date(day, format = "%Y/%m/%Y-%m-%d")]</span></span>
+<span><span class="co">#   </span></span>
+<span><span class="co">#   # bind the data to the df_stations data.table</span></span>
+<span><span class="co">#   df_stations &lt;- rbind(df_stations, df_stations_day)</span></span>
+<span><span class="co"># }</span></span>
+<span></span>
+<span></span>
+<span></span>
+<span><span class="co"># That worked fine, but took way too long. There is a more efficient way.</span></span>
+<span></span>
+<span><span class="co"># More efficient way:</span></span>
+<span></span>
+<span><span class="co"># Create a list of file paths for all days in 2022</span></span>
+<span><span class="va">days</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"2022-01-01"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"2022-12-31"</span><span class="op">)</span>, by <span class="op">=</span> <span class="st">"days"</span><span class="op">)</span></span>
+<span><span class="va">file_paths</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html">sprintf</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/stations/%s-stations.csv"</span>, <span class="fu"><a href="https://rdrr.io/r/base/format.html">format</a></span><span class="op">(</span><span class="va">days</span>, <span class="st">"%Y/%m/%Y-%m-%d"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Use lapply to read all files into a list of data.tables</span></span>
+<span><span class="va">data_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq_along</a></span><span class="op">(</span><span class="va">file_paths</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">dt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="va">file_paths</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="va">dt</span><span class="op">[</span>, <span class="va">date</span> <span class="op">:=</span> <span class="va">days</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>  <span class="co"># Add date column</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/function.html">return</a></span><span class="op">(</span><span class="va">dt</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Combine all data.tables into one</span></span>
+<span><span class="va">df_stations</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/rbindlist.html">rbindlist</a></span><span class="op">(</span><span class="va">data_list</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p>There are many valuable information in this data.table. Some of the information will be disregarded in the following step, since the scale of this project does not allow for a detailed analysis of all variables. However, this should be kept in mind for future research. For understanding the complex nature of local competition in a more sophisticated way for example, the opening hours of a station could be a valuable variable to assess heterogeneous pricing patterns at different points of the day. The intuition would be that stations that have longer opening hours have higher market power at certain points of time (e.g.&nbsp;at night) and can thus charge higher prices. However, this is not the focus of this project and would not be in the scope of the course <em>Applied Economics</em>.</p>
+<p><sup>test</sup></p>
+<p><span class="smallcaps">test</span></p>
 </section></section></section><section id="prix-des-carburants-en-france" class="level2"><h2 class="anchored" data-anchor-id="prix-des-carburants-en-france">Prix des carburants en France</h2>
 <section id="small-working-example-1" class="level3"><h3 class="anchored" data-anchor-id="small-working-example-1">Small Working Example</h3>
 <section id="loading-data-1" class="level4"><h4 class="anchored" data-anchor-id="loading-data-1">Loading Data</h4>

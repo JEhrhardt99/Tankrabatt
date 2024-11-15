@@ -93,7 +93,6 @@ df$date <- as.POSIXct(df$date,
                       tz = "Europe/Berlin")
 ```
 
-
 Some data exploration:
 
 ```{r}
@@ -213,7 +212,7 @@ head(weird_stations$name)
 head(weird_stations_test$name)
 ```
 
-The weird observations do not correspond to the same stations at different points in time. 
+The weird observations do not correspond to the same stations at different points in time.
 
 ```{r}
 #| label: clear_environment
@@ -314,7 +313,6 @@ head(test, 3)
 
 #### Stations Data
 
-
 ```{r}
 #| label: empty_environment
 #| echo: true
@@ -324,19 +322,173 @@ rm(list = ls())
 
 ```
 
-
 I start by merging the separate station data files, since I have not yet received information on the weird observations in the prices data and might want to change the approach to the data preprocessing.
-
 
 ```{r}
 #| label: stations_data
 #| echo: true
 #| output: true
 
-# load the station data for the entire year
-df_stations <- fread("../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv")
+# load the station data for day 1
+df_stations_day1 <- fread("../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv")
+
+# write a for loop that iterates over all days in the year 2022, taking the folder structure into account
+
+
+
+# # create a list of all days in 2022
+# days <- seq(as.Date("2022-01-01"), as.Date("2022-12-31"), by = "days")
+# 
+# # create a list of all days in 2022 in the format of the folder structure
+# days_str <- format(days, "%Y/%m/%Y-%m-%d")
+# 
+# # create an empty data.table to store the station data
+# df_stations <- data.table()
+# 
+# # iterate over all days in 2022
+# for (day in days_str) {
+#   # load the station data for the day
+#   df_stations_day <- fread(paste0("../Data/Tankerkoenig/stations/", day, "-stations.csv"))
+#   
+#   # add the date as a column
+#   df_stations_day[, date := as.Date(day, format = "%Y/%m/%Y-%m-%d")]
+#   
+#   # bind the data to the df_stations data.table
+#   df_stations <- rbind(df_stations, df_stations_day)
+# }
+
+
+
+# That worked fine, but took way too long. There is a more efficient way.
+
+# More efficient way:
+
+# Create a list of file paths for all days in 2022
+days <- seq(as.Date("2022-01-01"), as.Date("2022-12-31"), by = "days")
+file_paths <- sprintf("../Data/Tankerkoenig/stations/%s-stations.csv", format(days, "%Y/%m/%Y-%m-%d"))
+
+# Use lapply to read all files into a list of data.tables
+data_list <- lapply(seq_along(file_paths), function(i) {
+  dt <- fread(file_paths[i])
+  dt[, date := days[i]]  # Add date column
+  return(dt)
+})
+
+# Combine all data.tables into one
+df_stations <- rbindlist(data_list)
+
+names(df_stations)
+```
+
+There are many valuable information in this data.table. Some of the information will be disregarded in the following step, since the scale of this project does not allow for a detailed analysis of all variables. However, this should be kept in mind for future research. For understanding the complex nature of local competition in a more sophisticated way for example, the opening hours of a station could be a valuable variable to assess heterogeneous pricing patterns at different points of the day. The intuition would be that stations that have longer opening hours have higher market power at certain points of time (e.g. at night) and can thus charge higher prices. However, this is not the focus of this project and would not be in the scope of the course *Applied Economics*.
+
+The following variables will be omitted:
+
+-   `street`
+
+-   `house_number`
+
+-   `first_active`
+
+-   `openingtimes_json`
+
+
+```{r}
+#| label: omit_station_vars
+#| echo: true
+#| output: true
+
+# omit the variables above
+df_stations <- df_stations[, -c("street", "house_number", "first_active", "openingtimes_json")]
+
+# check the structure of the data
+str(df_stations)
+```
+
+Now let's better understand the data and it's structure. First, I would like to know how many stations are there on the first day of the year, then I would like to know how many stations were there on the last day of the year. 
+
+
+
+```{r}
+#| label: station_counts_day1
+#| echo: true
+#| output: true
+
+# Find the station count on day one using the date variable and the uuid:
+unique(df_stations[date == as.Date("2022-01-01"), .N, by = uuid])
+
+
+
+# Count of unique stations on the first day of the year
+stations_day1 <- df_stations[date == as.Date("2022-01-01"), .N, by = uuid][, .N]
+
+# Count of unique stations on the last day of the year
+stations_day_last <- df_stations[date == as.Date("2022-12-31"), .N, by = uuid][, .N]
+
+# Print results
+cat("Number of stations on the first day of the year:", stations_day1, "\n")
+cat("Number of stations on the last day of the year:", stations_day_last, "\n")
+
+# Calculate total difference:
+cat("Total difference in stations: +", stations_day_last - stations_day1, "\n")
+```
+
+
+
+
+After this, I would even like to know more about the fluctuations in the number of stations over the year, to test the argument that stations (and also competition) is relevantly constant over time. This can only be the case, if there are not many fluctuations. Therefore, I calculate the number of stations for every day in the year 2022 and plot the results using ggplot2.
+
+
+```{r}
+#| label: station_counts_over_year
+#| echo: true
+#| output: true
+
+# Calculate the number of unique stations per day
+stations_over_year <- df_stations[
+  date >= as.Date("2022-01-01") & date <= as.Date("2022-12-31"), 
+  .(num_stations = uniqueN(uuid)), 
+  by = date
+]
+
+# Plot the results
+ggplot(stations_over_year, aes(x = date, y = num_stations)) +
+  geom_line(color = "blue") +
+  labs(
+    title = "Number of Stations Over the Year 2022",
+    x = "Date",
+    y = "Number of Stations"
+  ) +
+  theme_few() +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# let's add dashed lines at the beginning of the year and the end of the year and scale the plot a bit differently
+
+# Add dashed lines and adjust the y-axis scale
+ggplot(stations_over_year, aes(x = date, y = num_stations)) +
+  geom_line(color = "blue") +
+  geom_vline(xintercept = as.Date("2022-01-01"), linetype = "dashed", color = "black") +
+  geom_vline(xintercept = as.Date("2022-12-31"), linetype = "dashed", color = "black") +
+  scale_y_continuous(
+    limits = range(stations_over_year$num_stations) * c(0.9, 1.1),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  labs(
+    title = "Number of Stations Over the Year 2022",
+    x = "Date",
+    y = "Number of Stations"
+  ) +
+  theme_few() +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+
 
 ```
+
+
 
 
 ## Prix des carburants en France
