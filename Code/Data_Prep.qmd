@@ -2,7 +2,7 @@
 title: "Data Preprocessing"
 author: "Jannes Ehrhardt"
 date: today
-bibliography: quarto_documentation.bib
+bibliography: "bib/quarto_documentation.bib"
 format:
   html: 
     theme: journal
@@ -31,6 +31,7 @@ When rerunning the code, please make sure that all packages that will be loaded 
 #| echo: true
 #| output: false
 
+# load libraries
 library(ggplot2)
 library(ggthemes)
 library(jsonlite)
