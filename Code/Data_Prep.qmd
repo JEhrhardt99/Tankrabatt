@@ -36,6 +36,10 @@ library(ggthemes)
 library(jsonlite)
 library(tidyverse)
 library(data.table)
+library(purrr)
+library(xml2)
+library(XML)
+library(microbenchmark)
 ```
 
 ## Directories
@@ -401,10 +405,6 @@ head(test, 3)
 #| echo: true
 #| output: true
 
-# install.packages("xml2")
-library(xml2)
-library(purrr)
-
 # XML-Datei einlesen
 xml_data <- read_xml("../Data/Prix-des-carburants/2022/PrixCarburants_annuel_2022.xml")
 
@@ -414,17 +414,13 @@ xml_data <- read_xml("../Data/Prix-des-carburants/2022/PrixCarburants_annuel_202
 # XML-Datei in ein Dataframe umwandeln
 # xml_df <- as_data_frame(xml_data)
 
-
-# install.packages("XML")
-library(XML)
-
 # df <- xmlToDataFrame(nodes = getNodeSet(xml_data))
 
 # extract pdv_liste
 test <- xml_data %>% xml_find_all("//pdv_liste/pdv")
 
 
-# install.packages("microbenchmark")
-library(microbenchmark)
+
+
 
 ```
