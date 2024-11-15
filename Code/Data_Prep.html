@@ -109,7 +109,12 @@ div.csl-indent {
   <li><a href="#save-data" id="toc-save-data" class="nav-link" data-scroll-target="#save-data">Save Data</a></li>
   </ul>
 </li>
-  <li><a href="#big-working-example" id="toc-big-working-example" class="nav-link" data-scroll-target="#big-working-example">Big Working Example</a></li>
+  <li>
+<a href="#big-working-example" id="toc-big-working-example" class="nav-link" data-scroll-target="#big-working-example">Big Working Example</a>
+  <ul class="collapse">
+<li><a href="#stations-data" id="toc-stations-data" class="nav-link" data-scroll-target="#stations-data">Stations Data</a></li>
+  </ul>
+</li>
   </ul>
 </li>
   <li>
@@ -182,22 +187,22 @@ div.csl-indent {
 <span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html">getwd</a></span><span class="op">(</span><span class="op">)</span> </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section><section id="tankerkönig" class="level2"><h2 class="anchored" data-anchor-id="tankerkönig">Tankerkönig</h2>
+<p>The remote repository from Tankerkönig (<a href="https://dev.azure.com/tankerkoenig/tankerkoenig-data" class="uri">tankerkoenig</a>) can be cloned using <code>git clone</code>. However, The hole repository takes up over 100GB storage and thus is too large for my machine. The repository contains daily price data for gas stations in Germany since June 2014. The fuel tax discount came into effect at 1. of June 2022 and ended 31. of August 2022 (3 month period). To test for parallel trends with neighboring country France, I decided to manually download the data for the entire year of 2022. The data structure is as follows: For every day, there are two corresponding files: <code>prices.csv</code> and <code>stations.csv</code>, which are stored in sub directories of the <code>data</code> folder. The <code>prices.csv</code> file contains the prices and price changes for every gas station in Germany. The <code>stations.csv</code> file contains the metadata for every corresponding gas station in Germany. I have experimented with iteratively reading and binding the price data. However, the high observation count always results in memory overload (one single day contains between 200,000 to 300,000 observations). For adapting the approach of <span class="citation" data-cites="Frondel2024">Frondel, Thiel, and Vance (<a href="#ref-Frondel2024" role="doc-biblioref">2024</a>)</span>, only daily averages will be needed. Therefore, I first calculate the daily averages and then merge the data, to make computations possible. The first step is to find a way to calculate daily price averages per station for one day, before implementing an iterative approach to do it for all days in the period of interest. First, there will be a small working example.</p>
 <section id="small-working-example" class="level3"><h3 class="anchored" data-anchor-id="small-working-example">Small Working Example</h3>
 <section id="loading-data" class="level4"><h4 class="anchored" data-anchor-id="loading-data">Loading Data</h4>
-<p>The remote repository from Tankerkönig (link einfügen) can be cloned using <code>git clone</code>. However, The hole repository takes up over 100GB storage and thus is too large for my machine. The repository contains daily price data for gas stations in Germany since June 2014. The fuel tax discount came into effect at 1. of June 2022 and ended 31. of August 2022 (3 month period). To test for parallel trends with neighboring country France, I decided to manually download the data for 2021, 2022 and 2023. The data structure is as follows: For every day, there are two corresponding files: <code>prices.csv</code> and <code>stations.csv</code>, which are stored in sub directories of the <code>data</code> folder. The <code>prices.csv</code> file contains the prices and price changes for every gas station in Germany. The <code>stations.csv</code> file contains the metadata for every corresponding gas station in Germany. I have experimented with iteratively reading and binding the price data. However, the high observation count always results in memory overload (one single day contains between 200,000 to 300,000 observations). For addapting the approach of <span class="citation" data-cites="Frondel2024">Frondel, Thiel, and Vance (<a href="#ref-Frondel2024" role="doc-biblioref">2024</a>)</span>, only daily averages will be needed. Therefore, I first calculate the daily averages and then merge the data, to make computations possible. The first step is to find a way to calculate daily price averages per station for one day, before implementing an iterative approach to do it for all days in the period of interest</p>
 <div class="cell">
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># move up to project root and read data from data subfolder</span></span>
 <span><span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/prices/2022/01/2022-01-01-prices.csv"</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section><section id="data-preprocessing" class="level4"><h4 class="anchored" data-anchor-id="data-preprocessing">Data Preprocessing</h4>
-<p>Now, let us explore the data:</p>
+<p>Now, let’s explore the data. First, the date variable is not correctly read by default and needs to be corrected to German time zone:</p>
 <div class="cell">
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># first, the date varaible is not correctly read and needs to be corrected to German time zone:</span></span>
-<span><span class="co"># Convert the 'date' column to POSIXct and handle time zone</span></span>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Convert the 'date' column to POSIXct and handle time zone</span></span>
 <span><span class="va">df</span><span class="op">$</span><span class="va">date</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html">as.POSIXct</a></span><span class="op">(</span><span class="va">df</span><span class="op">$</span><span class="va">date</span>,</span>
 <span>                      format <span class="op">=</span> <span class="st">"%Y-%m-%d %H:%M:%S%z"</span>,</span>
 <span>                      tz <span class="op">=</span> <span class="st">"Europe/Berlin"</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p>Some data exploration:</p>
 <div class="cell">
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># How many stations were active on that day?</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/unique.html">unique</a></span><span class="op">(</span><span class="va">df</span><span class="op">$</span><span class="va">station_uuid</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span><span class="op">(</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -331,8 +336,8 @@ div.csl-indent {
 1: {""openingTimes"":[{""applicable_days"":31,""periods"":[{""startp"":""06:00"",""endp"":""21:00""}]},{""applicable_days"":32,""periods"":[{""startp"":""07:00"",""endp"":""21:00""}]},{""applicable_days"":64,""periods"":[{""startp"":""09:00"",""endp"":""21:00""}]}]}</code></pre>
 </div>
 </div>
-<p>The variable <code>openingtimes_json</code> contains information on the opening times and will be handled later on. However, in the raw data there seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.</p>
-<p>First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2023-07-12:</p>
+<p>The variable <code>openingtimes_json</code> contains information on the opening times and will be handled later on. Another issues arises in the raw data. There seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.</p>
+<p>First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2022-07-12:</p>
 <div class="cell">
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># price data for 2022-07-12</span></span>
 <span><span class="va">df_2022_test</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/prices/2022/07/2022-07-12-prices.csv"</span><span class="op">)</span></span>
@@ -373,6 +378,7 @@ div.csl-indent {
 <pre><code>[1] "Raisa eG"                 "Braun Mineraloelvertrieb"</code></pre>
 </div>
 </div>
+<p>The weird observations do not correspond to the same stations at different points in time.</p>
 <div class="cell">
 <div class="sourceCode" id="cb27"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># clear the environment except raw data df</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/rm.html">rm</a></span><span class="op">(</span>list <span class="op">=</span> <span class="fu"><a href="https://generics.r-lib.org/reference/setops.html">setdiff</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ls.html">ls</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"df"</span><span class="op">)</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -463,11 +469,20 @@ div.csl-indent {
 </div>
 </div>
 </section></section><section id="big-working-example" class="level3"><h3 class="anchored" data-anchor-id="big-working-example">Big Working Example</h3>
-</section></section><section id="prix-des-carburants-en-france" class="level2"><h2 class="anchored" data-anchor-id="prix-des-carburants-en-france">Prix des carburants en France</h2>
+<section id="stations-data" class="level4"><h4 class="anchored" data-anchor-id="stations-data">Stations Data</h4>
+<div class="cell">
+<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/rm.html">rm</a></span><span class="op">(</span>list <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/ls.html">ls</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>I start by merging the separate station data files, since I have not yet received information on the weird observations in the prices data and might want to change the approach to the data preprocessing.</p>
+<div class="cell">
+<div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># load the station data for the entire year</span></span>
+<span><span class="va">df_stations</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/fread.html">fread</a></span><span class="op">(</span><span class="st">"../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv"</span><span class="op">)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section></section></section><section id="prix-des-carburants-en-france" class="level2"><h2 class="anchored" data-anchor-id="prix-des-carburants-en-france">Prix des carburants en France</h2>
 <section id="small-working-example-1" class="level3"><h3 class="anchored" data-anchor-id="small-working-example-1">Small Working Example</h3>
 <section id="loading-data-1" class="level4"><h4 class="anchored" data-anchor-id="loading-data-1">Loading Data</h4>
 <div class="cell">
-<div class="sourceCode" id="cb40"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># getwd()</span></span>
+<div class="sourceCode" id="cb42"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># getwd()</span></span>
 <span><span class="co"># # load the data</span></span>
 <span><span class="co"># df_FRA &lt;- fread("../Data/Prix-des-carburants/prix-des-carburants-en-france-flux-instantane-v2.csv")</span></span>
 <span><span class="co"># </span></span>
@@ -484,7 +499,7 @@ div.csl-indent {
 </div>
 </section><section id="cleaning-data" class="level4"><h4 class="anchored" data-anchor-id="cleaning-data">Cleaning Data</h4>
 <div class="cell">
-<div class="sourceCode" id="cb41"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># give a list of the variable names</span></span>
+<div class="sourceCode" id="cb43"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># give a list of the variable names</span></span>
 <span><span class="co"># names(df_FRA)</span></span>
 <span><span class="co"># </span></span>
 <span><span class="co"># # Aim: Clean rename the colums to English </span></span>
@@ -540,7 +555,7 @@ div.csl-indent {
 </div>
 </section></section></section><section id="prix-des-carburants-en-france-xml" class="level2"><h2 class="anchored" data-anchor-id="prix-des-carburants-en-france-xml">Prix des carburants en France XML</h2>
 <div class="cell">
-<div class="sourceCode" id="cb42"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># XML-Datei einlesen</span></span>
+<div class="sourceCode" id="cb44"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># XML-Datei einlesen</span></span>
 <span><span class="va">xml_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="http://xml2.r-lib.org/reference/read_xml.html">read_xml</a></span><span class="op">(</span><span class="st">"../Data/Prix-des-carburants/2022/PrixCarburants_annuel_2022.xml"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># XML-Struktur anzeigen</span></span>

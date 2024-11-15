@@ -63,11 +63,11 @@ getwd()
 
 ## Tankerkönig
 
+The remote repository from Tankerkönig ([tankerkoenig](https://dev.azure.com/tankerkoenig/tankerkoenig-data){.uri}) can be cloned using `git clone`. However, The hole repository takes up over 100GB storage and thus is too large for my machine. The repository contains daily price data for gas stations in Germany since June 2014. The fuel tax discount came into effect at 1. of June 2022 and ended 31. of August 2022 (3 month period). To test for parallel trends with neighboring country France, I decided to manually download the data for the entire year of 2022. The data structure is as follows: For every day, there are two corresponding files: `prices.csv` and `stations.csv`, which are stored in sub directories of the `data` folder. The `prices.csv` file contains the prices and price changes for every gas station in Germany. The `stations.csv` file contains the metadata for every corresponding gas station in Germany. I have experimented with iteratively reading and binding the price data. However, the high observation count always results in memory overload (one single day contains between 200,000 to 300,000 observations). For adapting the approach of @Frondel2024, only daily averages will be needed. Therefore, I first calculate the daily averages and then merge the data, to make computations possible. The first step is to find a way to calculate daily price averages per station for one day, before implementing an iterative approach to do it for all days in the period of interest. First, there will be a small working example.
+
 ### Small Working Example
 
 #### Loading Data
-
-The remote repository from Tankerkönig (link einfügen) can be cloned using `git clone`. However, The hole repository takes up over 100GB storage and thus is too large for my machine. The repository contains daily price data for gas stations in Germany since June 2014. The fuel tax discount came into effect at 1. of June 2022 and ended 31. of August 2022 (3 month period). To test for parallel trends with neighboring country France, I decided to manually download the data for 2021, 2022 and 2023. The data structure is as follows: For every day, there are two corresponding files: `prices.csv` and `stations.csv`, which are stored in sub directories of the `data` folder. The `prices.csv` file contains the prices and price changes for every gas station in Germany. The `stations.csv` file contains the metadata for every corresponding gas station in Germany. I have experimented with iteratively reading and binding the price data. However, the high observation count always results in memory overload (one single day contains between 200,000 to 300,000 observations). For addapting the approach of @Frondel2024, only daily averages will be needed. Therefore, I first calculate the daily averages and then merge the data, to make computations possible. The first step is to find a way to calculate daily price averages per station for one day, before implementing an iterative approach to do it for all days in the period of interest
 
 ```{r}
 #| label: read_day_1
@@ -80,19 +80,21 @@ df <- fread("../Data/Tankerkoenig/prices/2022/01/2022-01-01-prices.csv")
 
 #### Data Preprocessing
 
-Now, let us explore the data:
+Now, let's explore the data. First, the date variable is not correctly read by default and needs to be corrected to German time zone:
 
 ```{r}
 #| label: correct_date
 #| echo: true
 #| output: false
 
-# first, the date varaible is not correctly read and needs to be corrected to German time zone:
 # Convert the 'date' column to POSIXct and handle time zone
 df$date <- as.POSIXct(df$date,
                       format = "%Y-%m-%d %H:%M:%S%z",
                       tz = "Europe/Berlin")
 ```
+
+
+Some data exploration:
 
 ```{r}
 #| label: active_stations
@@ -120,8 +122,6 @@ What about those observations where the price is negative? The Value should repr
 #| label: investigate_data
 #| echo: true
 #| output: true
-
-
 
 # create histogram of distribution of diesel prices
 ggplot(df, aes(x = diesel)) +
@@ -172,9 +172,9 @@ weird_stations <- df_stations %>%
 head(weird_stations, 3)
 ```
 
-The variable `openingtimes_json` contains information on the opening times and will be handled later on. However, in the raw data there seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.
+The variable `openingtimes_json` contains information on the opening times and will be handled later on. Another issues arises in the raw data. There seems to be no information on how these weird negative prices can be explained. Therefore, I will contact the data provider to get more information on this issue.
 
-First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2023-07-12:
+First, I also want to check if these weird observations correspond to the same stations at a different point in time. Therefore, I will check the (randomly chosen) date. 2022-07-12:
 
 ```{r}
 #| label: check_pattern2
@@ -212,6 +212,8 @@ head(weird_stations$name)
 # 2023-07-12
 head(weird_stations_test$name)
 ```
+
+The weird observations do not correspond to the same stations at different points in time. 
 
 ```{r}
 #| label: clear_environment
@@ -309,6 +311,33 @@ head(test, 3)
 ```
 
 ### Big Working Example
+
+#### Stations Data
+
+
+```{r}
+#| label: empty_environment
+#| echo: true
+#| output: true
+
+rm(list = ls())
+
+```
+
+
+I start by merging the separate station data files, since I have not yet received information on the weird observations in the prices data and might want to change the approach to the data preprocessing.
+
+
+```{r}
+#| label: stations_data
+#| echo: true
+#| output: true
+
+# load the station data for the entire year
+df_stations <- fread("../Data/Tankerkoenig/stations/2022/01/2022-01-01-stations.csv")
+
+```
+
 
 ## Prix des carburants en France
 
