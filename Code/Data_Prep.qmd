@@ -899,10 +899,10 @@ all_prices_new <- all_prices %>%
   mutate(price_date = ymd_hms(price_date,
                               tz = "Europe/Paris")) 
 
+
 # keep only the date part
 all_prices_new <- all_prices_new %>%
   mutate(price_date = as.Date(price_date))
 
-
-
 ```
+
