@@ -41,6 +41,7 @@ library(purrr)
 library(xml2)
 library(XML)
 library(microbenchmark)
+library(lubridate)
 ```
 
 ## Directories
@@ -790,6 +791,9 @@ print(t1 - t0)    # Calculate and print the elapsed time for the operation.
 
 
 
+
+########################## This is from Mr. Dannemann and does not extract station ids ##########################
+
 locs <- lapply(xml_data_list, function(i) {  # Apply a function to each element of 'xml_data_list'.
   i[[".attrs"]] %>%                         # Access the '.attrs' element of the current list item 'i'.
     as.list() %>%                           # Convert the '.attrs' element into a list.
@@ -824,6 +828,7 @@ t1 <- Sys.time()  # Record the end time to measure how long the operation took.
 print(t1 - t0)    # Calculate and print the elapsed time for the operation.
 
 
+##############################################################################################################
 
 
 
@@ -831,122 +836,8 @@ print(t1 - t0)    # Calculate and print the elapsed time for the operation.
 
 
 
-# show data types
-str(locs)
 
-# convert id, latitude and longitude to numeric
-locs$id <- as.numeric(locs$id)
-locs$latitude <- as.numeric(locs$latitude)
-locs$longitude <- as.numeric(locs$longitude)
-
-# show data types
-str(prix)
-
-# convert id and prix to numeric
-prix$id <- as.numeric(prix$id)
-prix$valeur <- as.numeric(prix$valeur)
-
-# convert maj to date format using the correct time format for France
-prix$maj <- as.POSIXct(prix$maj, format = "%Y-%m-%dT%H:%M:%S%z", tz = "Europe/Paris")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Function to extract station attributes
-extract_station_attributes <- function(pdv) {
-  attrs <- pdv[[".attrs"]]
-  tibble(
-    station_id = attrs[["id"]],
-    longitude = as.numeric(attrs[["longitude"]]) / 100000,
-    latitude = as.numeric(attrs[["latitude"]]) / 100000
-  )
-}
-
-# Function to extract price information
-extract_prices <- function(pdv) {
-  prix_list <- pdv[names(pdv) == "prix"]
-  
-  # Extract price details and combine them into a dataframe
-  price_data <- map_dfr(prix_list, function(prix) {
-    tibble(
-      fuel_type = prix[["nom"]],
-      fuel_id = prix[["id"]],
-      price_date = prix[["maj"]],
-      price_value = as.numeric(prix[["valeur"]])
-    )
-  })
-  
-  # Add station attributes to the price data
-  station_attrs <- extract_station_attributes(pdv)
-  price_data <- price_data %>%
-    mutate(
-      station_id = station_attrs$station_id,
-      longitude = station_attrs$longitude,
-      latitude = station_attrs$latitude
-    )
-  
-  return(price_data)
-}
-
-# Process all stations and compile the results
-t0 <- Sys.time()
-
-all_prices <- map_dfr(xml_data_list, extract_prices)
-
-t1 <- Sys.time()
-print(t1 - t0)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+######################### This works #######################
 
 
 # Function to extract station attributes
@@ -991,28 +882,26 @@ t1 <- Sys.time()
 print(t1 - t0)
 
 
-
-
-
-
-
-
-
-
-
-
+ #####################################################################
 
 
 # show how many unique stations there are
 unique(all_prices$station_id) %>% length()
 
 
+# show the structure of the data
+str(all_prices)
 
 
+# convert price_date to a date format using the correct time format for France
+# (save as new dataframe in case of logical errors => xml data has not to be extracted again - over 8 hours.)
+all_prices_new <- all_prices %>%
+  mutate(price_date = ymd_hms(price_date,
+                              tz = "Europe/Paris")) 
 
-
-
-
+# keep only the date part
+all_prices_new <- all_prices_new %>%
+  mutate(price_date = as.Date(price_date))
 
 
 
