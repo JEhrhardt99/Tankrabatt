@@ -992,4 +992,28 @@ print(t1 - t0)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+# show how many unique stations there are
+unique(all_prices$station_id) %>% length()
+
+
+
+
+
+
+
+
+
+
+
 ```
