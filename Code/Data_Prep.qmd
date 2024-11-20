@@ -767,9 +767,14 @@ rm(list = setdiff(ls(), "df_stations"))
 # rm(list = ls())
 ```
 
+
+
 ## Prix des carburants en France XML
 
+
+
 In this Diff-in-Diff Appraoch, France fuel stations are used as a control group. The Data are gathered from (LINK). The data are stored in an `.xml` file. In what follows, this file will be read and transformed into a format, so it can be handled in R. To load and transform the data, the `xml2` and `XML` packages are loaded. 
+
 
 ```{r}
 #| label: load_xml
@@ -849,6 +854,7 @@ extract_station_attributes <- function(attrs) {
   )
 }
 
+
 # Function to extract price information
 extract_prices <- function(pdv, station_attrs) {
   prix_list <- pdv[names(pdv) == "prix"]
@@ -884,14 +890,11 @@ print(t1 - t0)
 
  #####################################################################
 
-
 # show how many unique stations there are
 unique(all_prices$station_id) %>% length()
 
-
 # show the structure of the data
 str(all_prices)
-
 
 # convert price_date to a date format using the correct time format for France
 # (save as new dataframe in case of logical errors => xml data has not to be extracted again - over 8 hours.)
@@ -899,10 +902,14 @@ all_prices_new <- all_prices %>%
   mutate(price_date = ymd_hms(price_date,
                               tz = "Europe/Paris")) 
 
-
 # keep only the date part
 all_prices_new <- all_prices_new %>%
   mutate(price_date = as.Date(price_date))
 
+# save the data to avoid reloading this long process
+getwd()
+fwrite(all_prices_new,
+       file = "../Data/Prix-des-carburants/2022/FRA_prices_save.csv.gz",
+       row.names = FALSE)
 ```
 
